@@ -1,6 +1,5 @@
 import os
 import tempfile
-
 import chromadb
 import ollama
 import streamlit as st
@@ -142,7 +141,7 @@ def query_collection(prompt: str, n_results: int = 10):
     return results
 
 
-def call_llm(context: str, prompt: str):
+def call_llm(context: str, prompt: str, model_name: str):
     """Calls the language model with context and prompt to generate a response.
 
     Uses Ollama to stream responses from a language model by providing context and a
@@ -151,6 +150,7 @@ def call_llm(context: str, prompt: str):
     Args:
         context: String containing the relevant context for answering the question
         prompt: String containing the user's question
+        model_name: The selected model for querying the API
 
     Yields:
         String chunks of the generated response as they become available from the model
@@ -159,7 +159,7 @@ def call_llm(context: str, prompt: str):
         OllamaError: If there are issues communicating with the Ollama API
     """
     response = ollama.chat(
-        model="llama3.2:3b",
+        model=model_name,
         stream=True,
         messages=[
             {
@@ -211,16 +211,27 @@ def re_rank_cross_encoders(documents: list[str]) -> tuple[str, list[int]]:
 
 
 if __name__ == "__main__":
-    # Document Upload Area
+    # Initialize session state for query history
+    if "query_history" not in st.session_state:
+        st.session_state.query_history = []
+
+    # Sidebar - Always available model selection dropdown and document upload
     with st.sidebar:
-        st.set_page_config(page_title="RAG Question Answer")
+        st.set_page_config(page_title="VBC")
+
+        # Model selection dropdown
+        model_choice = st.selectbox(
+            "Select Model:",
+            options=["llama3.2:3b", "llama3.2:latest", "mistral:latest", "llama3:latest","GPT-40"],  # Add your available models here
+            index=0,
+        )
+
+        # Document Upload Area
         uploaded_file = st.file_uploader(
             "**📑 Upload PDF files for QnA**", type=["pdf"], accept_multiple_files=False
         )
 
-        process = st.button(
-            "⚡️ Process",
-        )
+        process = st.button("⚡️ Process")
         if uploaded_file and process:
             normalize_uploaded_file_name = uploaded_file.name.translate(
                 str.maketrans({"-": "_", ".": "_", " ": "_"})
@@ -228,18 +239,26 @@ if __name__ == "__main__":
             all_splits = process_document(uploaded_file)
             add_to_vector_collection(all_splits, normalize_uploaded_file_name)
 
-    # Question and Answer Area
-    st.header("🗣️ RAG Question Answer")
+        # Query History - Collapsible in Sidebar
+        with st.expander("🗂️ Query History", expanded=False):
+            for i, q in enumerate(st.session_state.query_history, 1):
+                st.markdown(f"**{i}.** {q}")
+
+    # Main Content Area - QnA
+    st.header("🗣️ Vidhyanubhuti Cognitron")
     prompt = st.text_area("**Ask a question related to your document:**")
-    ask = st.button(
-        "🔥 Ask",
-    )
+    ask = st.button("🔥 Ask")
 
     if ask and prompt:
+        # Add the prompt to query history
+        st.session_state.query_history.append(prompt)
+
         results = query_collection(prompt)
         context = results.get("documents")[0]
         relevant_text, relevant_text_ids = re_rank_cross_encoders(context)
-        response = call_llm(context=relevant_text, prompt=prompt)
+        response = call_llm(
+            context=relevant_text, prompt=prompt, model_name=model_choice
+        )
         st.write_stream(response)
 
         with st.expander("See retrieved documents"):
