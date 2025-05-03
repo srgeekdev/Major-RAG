@@ -6,7 +6,6 @@ Demo LLM app with RAG for the YouTube video.
 
 Watch the video 👇
 
-<a href="https://youtu.be/1y2TohQdNbo">
 <img src="https://i.imgur.com/lJUyEm1.png" width="800">
 </a>
 
